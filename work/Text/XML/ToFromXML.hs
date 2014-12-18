@@ -10,8 +10,6 @@ module Text.XML.ToFromXML (
 
 import GHC.Generics
 
-import Debug.Trace
-
 import qualified Data.ByteString as BS
 
 import Text.XML.Expat.Pickle
@@ -114,18 +112,27 @@ instance FromToXML Bool where
 instance FromToXML Char where
 	xMLPickler = xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
 
+{-
+A String is represented as tag content, using the common Haskell escape sequences.
+For better readability and prevention of very long lines in the XML file, after each '\r', '\n' and '\t'
+the same character is inserted unescaped after the character's escape sequence.
+The unescaped character is removed again when parsing the String.
+For example, "abc\ndef" will be written in the XML file as "abc\\n\ndef",
+with the LF escaped (i.e. "\\n") and followed by a "real" LF ('\n'). The "real" LF will
+be filtered out again while parsing the XML file String.
+-}
 instance FromToXML String where
 	xMLPickler = xpContent pickleContentString
 
-pickleLiterally = (`elem` ['\r','\n','\t'])
+skipPickleString = (`elem` ['\r','\n','\t'])
 
 pickleContentString :: PU String String
 pickleContentString = xpWrap ( readLitString, showLitString ) xpText0 where
 	readLitString "" = ""
-	readLitString (c:ss) | pickleLiterally c = c : readLitString ss
+	readLitString (c:ss) | skipPickleString c = readLitString ss
 	readLitString s  = let [(c,ss)] = readLitChar s in c : readLitString ss
 	showLitString "" = ""
-	showLitString (c:ss) | pickleLiterally c = c : showLitString ss
+	showLitString (c:ss) | skipPickleString c = showLitChar c $ c : showLitString ss
 	showLitString (c:ss) = showLitChar c $ showLitString ss
 
 -- Didn't use xpMap because show'ing keys as attributes might be inconvenient/unreadable for more complex key types
@@ -142,22 +149,23 @@ instance (FromToXML v) => FromToXML (IntMap.IntMap v) where
 -- Didn't use an attribute for the dimension of the tuple because this is not representable/checkable by a schema
 
 instance (FromToXML a,FromToXML b) => FromToXML (a,b) where
-	xMLPickler = xpElemNodes "TUPLE-2" $ xpPair (xpComponent 1) (xpComponent 2)
+	xMLPickler = xpElemNodes "PAIR" $ xpPair (xpComponent 0) (xpComponent 1)
 
 instance (FromToXML a,FromToXML b,FromToXML c) => FromToXML (a,b,c) where
-	xMLPickler = xpElemNodes "TUPLE-3" $ xpTriple (xpComponent 1) (xpComponent 2) (xpComponent 3)
+	xMLPickler = xpElemNodes "TRIPLE" $ xpTriple (xpComponent 0) (xpComponent 1) (xpComponent 2)
 
 instance (FromToXML a,FromToXML b,FromToXML c,FromToXML d) => FromToXML (a,b,c,d) where
-	xMLPickler = xpElemNodes "TUPLE-4" $ xp4Tuple (xpComponent 1) (xpComponent 2) (xpComponent 3) (xpComponent 4)
+	xMLPickler = xpElemNodes "QUADRUPLE" $ xp4Tuple (xpComponent 0) (xpComponent 1) (xpComponent 2) (xpComponent 3)
 
 instance (FromToXML a,FromToXML b,FromToXML c,FromToXML d,FromToXML e) => FromToXML (a,b,c,d,e) where
-	xMLPickler = xpElemNodes "TUPLE-5" $ xp5Tuple (xpComponent 1) (xpComponent 2) (xpComponent 3) (xpComponent 4) (xpComponent 5)
+	xMLPickler = xpElemNodes "QUINTUPLE" $ xp5Tuple (xpComponent 0) (xpComponent 1) (xpComponent 2) (xpComponent 3) (xpComponent 4)
 
 instance (FromToXML a,FromToXML b,FromToXML c,FromToXML d,FromToXML e,FromToXML f) => FromToXML (a,b,c,d,e,f) where
-	xMLPickler = xpElemNodes "TUPLE-6" $ xp6Tuple (xpComponent 1) (xpComponent 2) (xpComponent 3) (xpComponent 4) (xpComponent 5) (xpComponent 6)
+	xMLPickler = xpElemNodes "SEXTUPLE" $ xp6Tuple (xpComponent 0) (xpComponent 1) (xpComponent 2) (xpComponent 3) (xpComponent 4) (xpComponent 5)
 
 xpComponent :: (FromToXML a) => Int -> Pickler a
-xpComponent i = xpElemNodes ("COMPONENT-" ++ show i) xMLPickler
+xpComponent i = xpElemNodes (componentnames!!i) xMLPickler where
+	componentnames = [ "FIRST","SECOND","THIRD","FOURTH","FIFTH","SIXTH" ]
 
 instance (FromToXML a) => FromToXML (Maybe a) where
 	xMLPickler = xpAlt selfun [
@@ -178,7 +186,7 @@ instance (FromToXML a,Ord a) => FromToXML (Set.Set a) where
 
 -- TODO: Insert FromToXML instances for date and time types, maybe in conformance to XSD types?
 
--- Here we assume that array index types are sufficiently simple to be represented as string in an attribute...
+-- Here we assume that array index types (usually Int) are sufficiently simple to be represented as string in an attribute...
 instance (Ix i,Show i,Read i,FromToXML e) => FromToXML (Array i e) where
 	xMLPickler = xpWrap (list2arr,arr2list) $ xpElem "ARRAY" xpbounds $ xpList $ xpElemNodes "ELEM" xMLPickler where
 		xpbounds = xpPair (xpAttr "lowerBound" xpPrim) (xpAttr "upperBound" xpPrim)
