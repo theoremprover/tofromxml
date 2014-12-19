@@ -46,7 +46,8 @@ data Test a i e =
 	Test13 (String,Int) |
 	Test14 (Int,Int) |
 	Test15 (IntMap.IntMap (Test () Int ())) |
-	Test16 [TestSel]
+	Test16 [TestSel] |
+	Test17 { first::String, second::Int, third::Float }
 	deriving (Show,Eq,Generic)
 
 data TestSel = TestSel1 Int | TestSel2 Char | TestSel3 TestSel | TestSel4 (Test () Int ()) | TestSel5
@@ -83,7 +84,8 @@ main = do
 			TestSel2 'f',
 			TestSel3 $ TestSel3 $ TestSel3 $ TestSel1 9999,
 			TestSel4 $ Test16 [TestSel1 5, TestSel4 $ Test5, TestSel5 ],
-			TestSel5 ]
+			TestSel5 ],
+		Test17 "abc" 123 3.14
 		] :: [Test Integer Int Float])
 	rc <- case all id oks of
 		True -> putStrLn "All tests OK." >> return ExitSuccess

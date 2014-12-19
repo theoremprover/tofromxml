@@ -28,7 +28,7 @@ import qualified Data.IntMap as IntMap
 import Data.Complex
 import Data.Array.IArray
 
-
+-- | For the picklers, are using nodes with both tag and text being Strings.
 type Pickler a = PU (ListOf (UNode String)) a
 
 class GFromToXML f where
@@ -50,20 +50,31 @@ instance (GFromToXML f1,GFromToXML f2) => GFromToXML (f1 :+: f2) where
 instance (GFromToXML f,Datatype d) => GFromToXML (M1 D d f) where
 	gXMLPickler = xpWrap (M1,unM1) gXMLPickler
 
+{-|
+The M1 constructor tag contains a name attribute with the constructor's name.
+It is unnecessary to encode the name as well, but makes the XML more humanely readable
+and might add to safety...
+-}
 instance (GFromToXML f,Constructor c) => GFromToXML (M1 C c f) where
 	gXMLPickler = xpWrap (M1,unM1) $ xpElemName "CONSTRUCTOR" conname gXMLPickler where
 		conname = conName (undefined :: M1 C c f p)
 
+{-|
+The M1 selector tag contains a name attribute with the field's name.
+The SELECTOR tag is unnecessary for encoding, since records are represented already generically
+by two-dimensional type products, but it improves readability.
+-}
 instance (GFromToXML f,Selector s) => GFromToXML (M1 S s f) where
 	gXMLPickler = xpWrap (M1,unM1) $ xpElemName "SELECTOR" selname gXMLPickler where
 		selname = selName (undefined :: M1 S s f p)
 
+-- | A helper function injecting a "name" attribute with a given value.
 xpElemName tag attrval pickler = xpWrap (snd,\b->((),b)) $
 	xpElem tag (xpAttrFixed "name" attrval) pickler
 
 {-
 V1 is not an instance of GFromToXML, because we can't serialize data of an empty type since there
-are no constructors. It shouldn't be necessary to serialize an empty type, hence this should be rejected by the type checker.
+are no constructors. It shouldn't be necessary to serialize an empty type, so V1 should be rejected by the type checker.
 -}
 
 instance (GFromToXML f) => GFromToXML (M1 S NoSelector f) where
@@ -75,9 +86,21 @@ instance GFromToXML U1 where
 instance (FromToXML a) => GFromToXML (K1 R a) where
 	gXMLPickler = xpWrap (K1,unK1) xMLPickler
 
+{-|
+FromToXML declares that there is a pickler for the instance type
+wrapped by the generic representation's K1 constructor.
+We give instances for data types that we do want to encode in more precise way, not
+following the generic pattern. For example, we want to encode unit "()" as a
+distinct tag <UNIT/>, not as text content generated with show/read.
+We give a default signature and definition which we can use conveniently by
+just stating "instance bla-type" for numeric types, for example.
+-}
 class FromToXML a where
+	-- | An instance of FromToXML provides a pickler:
 	xMLPickler :: Pickler a
+	-- | The default signature of xMLPickler requires Read and Show instances...
 	default xMLPickler :: (Read a,Show a) => Pickler a
+	-- | ... because the default definition via xpPrim uses show and read to convert the value to XML tag text content.
 	xMLPickler = xpContent xpPrim
 
 instance FromToXML () where
@@ -109,23 +132,32 @@ instance FromToXML Bool where
 		selfun True  = 0
 		selfun False = 1
 
+{-|
+We represent special Char's by Haskell's escape sequences.
+A Char is not embraced by single quotes (as it would be using the default instance).
+-}
 instance FromToXML Char where
 	xMLPickler = xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
 
-{-
-A String is represented as tag content, using the common Haskell escape sequences.
+{-|
+A String is represented a tag's text content, using the common Haskell escape sequences.
 For better readability and prevention of very long lines in the XML file, after each '\r', '\n' and '\t'
 the same character is inserted unescaped after the character's escape sequence.
 The unescaped character is removed again when parsing the String.
 For example, "abc\ndef" will be written in the XML file as "abc\\n\ndef",
-with the LF escaped (i.e. "\\n") and followed by a "real" LF ('\n'). The "real" LF will
-be filtered out again while parsing the XML file String.
+with the LF escaped (i.e. "\\n") and followed by a "real" LF ('\n').
+Injecting line breaks and tabs makes long text much more readable und humanely editable
+(which is one of the original purposes of XML).
+The "real" LF will be filtered out again while parsing the XML file String.
 -}
 instance FromToXML String where
 	xMLPickler = xpContent pickleContentString
 
 skipPickleString = (`elem` ['\r','\n','\t'])
 
+{-|
+Pickles a string to/from text content with escaping 
+-}
 pickleContentString :: PU String String
 pickleContentString = xpWrap ( readLitString, showLitString ) xpText0 where
 	readLitString "" = ""
@@ -135,19 +167,25 @@ pickleContentString = xpWrap ( readLitString, showLitString ) xpText0 where
 	showLitString (c:ss) | skipPickleString c = showLitChar c $ c : showLitString ss
 	showLitString (c:ss) = showLitChar c $ showLitString ss
 
--- Didn't use xpMap because show'ing keys as attributes might be inconvenient/unreadable for more complex key types
+{-|
+Pickler for a Map.
+Didn't use xpMap because show'ing keys as attributes might be inconvenient/unreadable for more complex key types.
+-}
 instance (Ord k,FromToXML k,FromToXML v) => FromToXML (Map.Map k v) where
 	xMLPickler = xpElemNodes "MAP" $ xpWrap (Map.fromList,Map.toList) $ xpList $ 
 		xpElemNodes "ASSOC" $ xpPair
 			(xpElemNodes "KEY"  xMLPickler)
 			(xpElemNodes "ELEM" xMLPickler)
 
+{-|
+Pickler for an IntMap.
+Here we use an attribute for the Int key.
+-}
 instance (FromToXML v) => FromToXML (IntMap.IntMap v) where
 	xMLPickler = xpElemNodes "INTMAP" $ xpWrap (IntMap.fromList,IntMap.toList) $ xpList $ 
 		xpElem "ELEM" (xpAttr "index" xpPrim) xMLPickler
 
--- Didn't use an attribute for the dimension of the tuple because this is not representable/checkable by a schema
-
+-- | Didn't use an attribute for the dimension of the tuple because this is not representable/checkable by a schema.
 instance (FromToXML a,FromToXML b) => FromToXML (a,b) where
 	xMLPickler = xpElemNodes "PAIR" $ xpPair (xpComponent 0) (xpComponent 1)
 
@@ -163,6 +201,7 @@ instance (FromToXML a,FromToXML b,FromToXML c,FromToXML d,FromToXML e) => FromTo
 instance (FromToXML a,FromToXML b,FromToXML c,FromToXML d,FromToXML e,FromToXML f) => FromToXML (a,b,c,d,e,f) where
 	xMLPickler = xpElemNodes "SEXTUPLE" $ xp6Tuple (xpComponent 0) (xpComponent 1) (xpComponent 2) (xpComponent 3) (xpComponent 4) (xpComponent 5)
 
+-- | Pickle a tuple's i'th component. The component tag names are distinct, otherwise hexpat-pickle confuses this with a list.
 xpComponent :: (FromToXML a) => Int -> Pickler a
 xpComponent i = xpElemNodes (componentnames!!i) xMLPickler where
 	componentnames = [ "FIRST","SECOND","THIRD","FOURTH","FIFTH","SIXTH" ]
@@ -186,32 +225,49 @@ instance (FromToXML a,Ord a) => FromToXML (Set.Set a) where
 
 -- TODO: Insert FromToXML instances for date and time types, maybe in conformance to XSD types?
 
--- Here we assume that array index types (usually Int) are sufficiently simple to be represented as string in an attribute...
+-- | Here we assume that array index types (usually Int) are sufficiently simple to be represented as string in an attribute...
 instance (Ix i,Show i,Read i,FromToXML e) => FromToXML (Array i e) where
 	xMLPickler = xpWrap (list2arr,arr2list) $ xpElem "ARRAY" xpbounds $ xpList $ xpElemNodes "ELEM" xMLPickler where
 		xpbounds = xpPair (xpAttr "lowerBound" xpPrim) (xpAttr "upperBound" xpPrim)
 		arr2list arr = (bounds arr,elems arr)
 		list2arr (bounds,arrelems) = listArray bounds arrelems
 
--- This is the catch-all instance, leading to the generic (Rep a) representation
+-- | This is the catch-all instance, leading to the generic (Rep a) representation
 instance (Generic a,GFromToXML (Rep a)) => FromToXML a where
 	xMLPickler = xpWrap (to,from) gXMLPickler
 
+{-|
+Converts generic Haskell data to a (strict) ByteString containing the XML representation.
+Usually the data type is made deriving Generic using the DeriveGeneric flag.
+-}
 toXML :: (Generic a,GFromToXML (Rep a)) => a -> BS.ByteString
 toXML x = Format.format' $ Format.indent 2 $ pickleTree (xpRoot gXMLPickler) (from x)
 
+{-|
+Convert generic Haskell data from a (strict) ByteString containing the XML representation.
+fromXMLEither will return Left in case of a parsing error, Right otherwise.
+-}
 fromXMLEither :: (GFromToXML f) => BS.ByteString -> Either String (f p)
 fromXMLEither bs = case parse' defaultParseOptions bs of
 	Left (XMLParseError errmsg loc) -> Left $ printf "XMLParseError at %s:\n    %s" (show loc) errmsg
 	Right tree  -> unpickleTree' (xpRoot gXMLPickler) tree
 
+{-|
+Convenience function wrapping around fromXMLEither, throwing an error in case of a parsing error.
+-}
 fromXML :: (Generic a,GFromToXML (Rep a)) => BS.ByteString -> a
 fromXML bs = case fromXMLEither bs of
 	Left  errmsg -> error errmsg
 	Right x      -> to x
 
+{-|
+Convenience action, writing an XML representation of generic Haskell data to a file.
+-}
 writeFileToXML :: (Generic a,GFromToXML (Rep a)) => FilePath -> a -> IO ()
 writeFileToXML filepath a = BS.writeFile filepath $ toXML a
 
+{-|
+Convenience action, reading generic Haskell data from an XML file.
+-}
 readFileFromXML :: (Generic a,GFromToXML (Rep a)) => FilePath -> IO a
 readFileFromXML filepath = BS.readFile filepath >>= return . fromXML
