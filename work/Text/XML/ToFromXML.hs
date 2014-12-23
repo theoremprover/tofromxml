@@ -36,7 +36,6 @@ class GFromToXML f where
 
 instance (GFromToXML f1,GFromToXML f2) => GFromToXML (f1 :*: f2) where
 	gXMLPickler = xpWrap (uncurry (:*:),\ (a :*: b) -> (a,b)) $
---		xpPair gXMLPickler gXMLPickler
 		xpElemNodes "PRODUCT" $ xpPair
 			(xpElemNodes "FIRST"  gXMLPickler)
 			(xpElemNodes "SECOND" gXMLPickler) 

@@ -85,7 +85,8 @@ main = do
 			TestSel3 $ TestSel3 $ TestSel3 $ TestSel1 9999,
 			TestSel4 $ Test16 [TestSel1 5, TestSel4 $ Test5, TestSel5 ],
 			TestSel5 ],
-		Test17 "abc" 123 3.14
+		Test17 "abc" 123 3.14,
+		Test1 12 'c' ()
 		] :: [Test Integer Int Float])
 	rc <- case all id oks of
 		True -> putStrLn "All tests OK." >> return ExitSuccess
