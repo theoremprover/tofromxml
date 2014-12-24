@@ -34,6 +34,13 @@ type Pickler a = PU (ListOf (UNode String)) a
 class GFromToXML f where
 	gXMLPickler :: Pickler (f p)
 
+{-
+instance (GFromToXML f1,GFromToXML f2) => GFromToXML (f1 :*: f2) where
+	gXMLPickler = xpWrap (uncurry (:*:),\ (a :*: b) -> (a,b)) $
+		xpElemNodes "PRODUCT" $ xpPair
+			(xpElemNodes "FIRST"  gXMLPickler)
+			(xpElemNodes "SECOND" gXMLPickler) 
+-}
 instance (GFromToXML f1,GFromToXML f2) => GFromToXML (f1 :*: f2) where
 	gXMLPickler = xpWrap (uncurry (:*:),\ (a :*: b) -> (a,b)) $
 		xpElemNodes "PRODUCT" $ xpPair
@@ -47,6 +54,9 @@ instance (GFromToXML f1,GFromToXML f2) => GFromToXML (f1 :+: f2) where
 		selfun (L1 _) = 0
 		selfun (R1 _) = 1
 
+{-|
+We won't construct a tag for "M1 D", since it is unnecessary.
+-}
 instance (GFromToXML f,Datatype d) => GFromToXML (M1 D d f) where
 	gXMLPickler = xpWrap (M1,unM1) gXMLPickler
 
