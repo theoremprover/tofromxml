@@ -126,7 +126,7 @@ We give instances for data types that we do want to encode in more precise way, 
 following the generic pattern. For example, we want to encode unit "()" as a
 distinct tag <UNIT/>, not as text content generated with show/read.
 We give a default signature and definition which we can use conveniently by
-just stating "instance Word32" for numeric types, for example.
+just stating "instance ToFromXML Word32" for numeric types, for example.
 -}
 class ToFromXML a where
 	-- | An instance of ToFromXML provides a pickler:
