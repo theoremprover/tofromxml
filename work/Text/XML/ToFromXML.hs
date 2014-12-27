@@ -179,7 +179,7 @@ the same character is inserted unescaped after the character's escape sequence.
 The unescaped character is removed again when parsing the String.
 For example, "abc\ndef" will be written in the XML file as "abc\\n\ndef",
 with the LF escaped (i.e. "\\n") and followed by a "real" LF ('\n').
-Injecting line breaks and tabs makes long text much more readable und humanely editable
+Injecting line breaks and tabs makes long text much more readable und editable by humans
 (which is one of the original purposes of XML).
 The "real" LF will be filtered out again while parsing the XML file String.
 -}
@@ -218,7 +218,7 @@ instance (ToFromXML v) => ToFromXML (IntMap.IntMap v) where
 	xMLPickler = xpElemNodes "INTMAP" $ xpWrap (IntMap.fromList,IntMap.toList) $ xpList $ 
 		xpElem "ELEM" (xpAttr "index" xpPrim) xMLPickler
 
--- | Didn't use an attribute for the dimension of the tuple because this is not representable/checkable by a schema.
+-- | Didn't use an attribute for the dimension of the tuple because this is not checkable by a schema.
 instance (ToFromXML a,ToFromXML b) => ToFromXML (a,b) where
 	xMLPickler = xpElemNodes "PAIR" $ xpPair (xpComponent 0) (xpComponent 1)
 
@@ -259,7 +259,7 @@ instance (ToFromXML a,Ord a) => ToFromXML (Set.Set a) where
 
 -- TODO: Insert ToFromXML instances for date and time types, maybe in conformance to XSD types?
 
--- | Here we assume that array index types (usually Int) are sufficiently simple to be represented as string in an attribute...
+-- | Here we assume that array index types (usually Int) are sufficiently simple to be represented as string in an attribute.
 instance (Ix i,Show i,Read i,ToFromXML e) => ToFromXML (Array i e) where
 	xMLPickler = xpWrap (list2arr,arr2list) $ xpElem "ARRAY" xpbounds $ xpList $
 		xpElemNodes "ELEM" xMLPickler where
