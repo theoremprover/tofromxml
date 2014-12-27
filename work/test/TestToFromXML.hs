@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -fcontext-stack=50 #-}
 
 module Main where
 
@@ -15,15 +16,15 @@ import Data.Complex
 import Data.Ratio
 import Text.Printf
 
-testTest :: (Eq i,Eq e,Eq a,Ix i,Ord a,Show a,Show i,Read i,Show e,FromToXML e,FromToXML a) => (Int,Test a i e) -> IO Bool
+testTest :: (Eq i,Eq e,Eq a,Ix i,Ord a,Show a,Show i,Read i,Show e,ToFromXML e,ToFromXML a) => (Int,Test a i e) -> IO Bool
 testTest (i,test) = do
 	putStrLn $ "\n-------------------------\nTest " ++ show i
 
 	let testfilename = "Test" ++ show i ++ ".xml"
 
-	writeFileToXML testfilename test
+	writeToXMLFile testfilename test
 
-	test' <- readFileFromXML testfilename
+	test' <- readFromXMLFile testfilename
 
 	case test==test' of
 		True -> putStrLn "OK."
@@ -47,7 +48,11 @@ data Test a i e =
 	Test14 (Int,Int) |
 	Test15 (IntMap.IntMap (Test () Int ())) |
 	Test16 [TestSel] |
-	Test17 { first::String, second::Int, third::Float }
+	Test17 { first::String, second::Int, third::Float } |
+	Test18 Int Char Bool String |
+	Test19 Int Char Bool String Int |
+	Test20 Int Char Bool (String,Char) Int Float |
+	Test21 Int Char Bool (String,Char,Int) Int Float Int Double Bool Char
 	deriving (Show,Eq,Generic)
 
 data TestSel = TestSel1 Int | TestSel2 Char | TestSel3 TestSel | TestSel4 (Test () Int ()) | TestSel5
@@ -86,7 +91,11 @@ main = do
 			TestSel4 $ Test16 [TestSel1 5, TestSel4 $ Test5, TestSel5 ],
 			TestSel5 ],
 		Test17 "abc" 123 3.14,
-		Test1 12 'c' ()
+		Test1 12 'c' (),
+		Test18 13 'd' False "test18",
+		Test19 13 'd' False "test19" 14,
+		Test20 13 'd' False ("test20",'a') 15 2.71,
+		Test21 13 'd' False ("test21",'b',3) 15 2.71 (-1) 3.1 True 'e'
 		] :: [Test Integer Int Float])
 	rc <- case all id oks of
 		True -> putStrLn "All tests OK." >> return ExitSuccess
