@@ -35,9 +35,19 @@ type Pickler a = PU (ListOf (UNode String)) a
 class GToFromXML f where
 	gXMLPickler :: Pickler (f p)
 
+{-|
+We do not want our XML to be cluttered with nested tuples, so we flatten
+these in the XML representation.
+-}
 class PickleProdN f where
+	-- | Given the current index in the flattened tuple, pickleProdN returns the incremented index and the pickler.
 	pickleProdN :: Int -> (Int,Pickler (f p))
 
+{-|
+Pickling a product is done by first pickling the first component, and then pickling the second
+component with the current index i1 returned by the first pickleProdN i.
+The current index i2 after pickleProdN i1 is returned.
+-}
 instance (PickleProdN f1,PickleProdN f2) => PickleProdN (f1 :*: f2) where
 	pickleProdN i = (i2,xpWrap (uncurry (:*:),\ (a :*: b) -> (a,b)) $ xpPair p1 p2) where
 		(i1,p1) = pickleProdN i
@@ -94,7 +104,7 @@ instance (GToFromXML f) => GToFromXML (M1 S NoSelector f) where
 instance (GToFromXML f,Selector s) => GToFromXML (M1 S s f) where
 	gXMLPickler = xpWrap (M1,unM1) gXMLPickler
 
--- | A helper function injecting a "name" attribute with a given/fixed value.
+-- | A helper function injecting an attribute with a given/fixed value in a tag.
 xpElemWithAttr tag attrname attrval pickler = xpWrap (snd,\b->((),b)) $
 	xpElem tag (xpAttrFixed attrname attrval) pickler
 

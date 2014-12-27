@@ -9,7 +9,7 @@ import Text.XML.ToFromXML
 import System.Exit
 import Data.Char
 import qualified Data.Map.Lazy as Map
-import qualified Data.IntMap.Lazy as IntMap
+import qualified Data.IntMap as IntMap
 import qualified Data.Set as Set
 import Data.Array.IArray
 import Data.Complex
