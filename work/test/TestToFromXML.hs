@@ -4,7 +4,6 @@
 module Main where
 
 import Text.XML.ToFromXML
--- GHC.Generics is exported by ToFromXML
 
 import System.Exit
 import Data.Char
@@ -15,6 +14,7 @@ import Data.Array.IArray
 import Data.Complex
 import Data.Ratio
 import Text.Printf
+import System.FilePath
 
 testTest :: (Eq i,Eq e,Eq a,Ix i,Ord a,Show a,Show i,Read i,Show e,ToFromXML e,ToFromXML a) => (Int,Test a i e) -> IO Bool
 testTest (i,test) = do
@@ -26,10 +26,12 @@ testTest (i,test) = do
 
 	test' <- readFromXMLFile testfilename
 
-	case test==test' of
-		True -> putStrLn "OK."
-		False -> error $ printf "/= ERROR!\nWRITTEN: %s\n/=\nREAD   : %s" (show test) (show test')
-	return $ test==test'
+	rc <- case test==test' of
+		True -> putStrLn "OK." >> return ExitSuccess
+		False -> do
+			putStrLn $ printf "/= ERROR!\nWRITTEN: %s\n/=\nREAD   : %s" (show test) (show test')
+			return $ ExitFailure 1
+	exitWith rc
 
 data Test a i e =
 	Test1 Int Char () |
@@ -59,7 +61,7 @@ data TestSel = TestSel1 Int | TestSel2 Char | TestSel3 TestSel | TestSel4 (Test 
 	deriving (Show,Eq,Generic)
 
 main = do
-	longstring <- readFile "TestToFromXML.hs"
+	longstring <- readFile $ "test" </> "TestToFromXML.hs"
 	oks <- sequence $ map testTest $ zip [1..] ([
 		Test13 (longstring,0),
 		Test3 [(map chr [8..16],99)],

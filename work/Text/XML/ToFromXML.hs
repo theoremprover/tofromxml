@@ -17,29 +17,42 @@ Then, the 'writeToXMLFile' will write an XML file representing the value.
 This value can be read again using 'readFromXMLFile'. See the following example
 (pragma syntax below is broken, how can one correctly incorporate comments in a haddock code block?):
 
-> { -# LANGUAGE DeriveGeneric #- }
-> { -# OPTIONS_GHC -fcontext-stack=50 #- }
-> 
-> import Text.XML.ToFromXML
-> -- GHC.Generics is exported by ToFromXML
-> 
-> data Test = Test { str::String, something::(Int,Char) }
-> 	deriving (Generic,Show,Eq)
-> 
-> main = do
-> 	let test = Test "abc" (42,'z')
-> 	writeToXMLFile "test.xml" test
-> 	putStrLn $ "writeToXMLFile : " ++ show test
-> 
+>{ -# LANGUAGE DeriveGeneric #- }
+>{ -# OPTIONS_GHC -fcontext-stack=50 #- }
+>
+>import Text.XML.ToFromXML
+>-- GHC.Generics is exported by ToFromXML
+>
+>data Test = Test { str::String, something::(Int,Char) }
+>	deriving (Generic,Show,Eq)
+>
+>main = do
+>	let test = Test "abc" (42,'z')
+>	writeToXMLFile "test.xml" test
+>	putStrLn $ "writeToXMLFile : " ++ show test
+>
 >	-- readFromXMLFile's return type can be inferred in this example,
 >	-- otherwise it would have to be declared
-> 	test' <- readFromXMLFile "test.xml"
-> 	putStrLn $ "readFromXMLFile: " ++ show test'
-> 	
-> 	putStrLn $ if test==test' then "OK." else "ERROR!"
+>	test' <- readFromXMLFile "test.xml"
+>	putStrLn $ "readFromXMLFile: " ++ show test'
+>	
+>	putStrLn $ if test==test' then "OK." else "ERROR!"
 
 Remark: Both 'writeToXMLFile' and 'readFromXMLFile' require the value type
 @a@'s generic represention @Rep a@ be an instance of @GFromToXML@, but this is automatically fulfilled.
+
+The generated XML file is
+
+><?xml version="1.0" encoding="UTF-8"?>
+><CONSTRUCTOR name="Test">
+>  <ARG-1 selector="str">abc</ARG-1>
+>  <ARG-2 selector="something">
+>    <PAIR>
+>      <FIRST>42</FIRST>
+>      <SECOND>z</SECOND>
+>    </PAIR>
+>  </ARG-2>
+></CONSTRUCTOR>
 
 The general intention of this module is to keep the generated XML as intuitive and
 easy to read as possible. For example, we do flatten nested pairs used by "GHC.Generics"
@@ -49,9 +62,11 @@ the Node types used in "Text.XML.Expat.Pickle").
 
 One might need to increase the context stack size with the @-fcontext-stack@ option
 when compiling code using this module.
+
+A test suite is included in the package, see @TestToFromXML.hs@ in the package's test directory.
 -}
 module Text.XML.ToFromXML (
-	ToFromXML,
+	ToFromXML(..),
 	toXML,fromXML,fromXMLEither,
 	readFromXMLFile,writeToXMLFile,
 	module GHC.Generics
@@ -170,18 +185,34 @@ instance (ToFromXML a) => GToFromXML (K1 R a) where
 {-|
 The class 'ToFromXML' declares that there is a pickler for the instance type
 wrapped by the generic representation's @K1@ constructor.
-We give instances for data types that we do want to encode in more precise way, not
+There are instances for data types that we do want to encode in more precise way, not
 following the generic pattern. For example, we want to encode unit @()@ as a
 distinct tag @\<UNIT\/\>@, not as text content generated with show/read.
 We give a default signature and definition which we can use conveniently by
 just stating @instance ToFromXML Word32@ for numeric types, for example.
+
+Special chars are represented in XML by Haskell's escape sequences.
+A char is not embraced by single quotes in the tag content (as it would be using the default instance).
+
+Since unfortunately CDATA sections are not supported with
+the Node types used in "Text.XML.Expat.Pickle" we are relying on,
+a String has to be represented in XML as a tag's text content, using the common Haskell escape sequences.
+For better readability and prevention of very long lines in the XML file, after each @'\r'@, @'\n'@ and @'\t'@
+the same character is inserted unescaped after the character's escape sequence.
+The unescaped character is removed again when parsing the String.
+For example, @"abc\ndef"@ will be written in the XML file as @"abc\\n\ndef"@,
+with the LF escaped (i.e. @"\\n"@) and followed by a real LF (@'\n'@).
+Injecting line breaks and tabs makes long text much more readable und editable by humans
+(which is one of the original purposes of XML).
+The real LF will be filtered out again while parsing the XML file String.
+
 -}
 class ToFromXML a where
-	-- | An instance of 'ToFromXML' provides a pickler:
+	-- | An instance of 'ToFromXML' provides a pickler for type @a@.
 	xMLPickler :: Pickler a
-	-- | The default signature of 'xMLPickler' requires 'Read' and 'Show' instances...
+	-- | The default signature of 'xMLPickler' requires 'Read' and 'Show' instances
 	default xMLPickler :: (Read a,Show a) => Pickler a
-	-- | ... because the default definition via 'xpPrim' uses show and read to convert the value to XML tag text content.
+	-- | The default definition via 'xpPrim' uses show and read to convert the value to XML tag text content.
 	xMLPickler = xpContent xpPrim
 
 instance ToFromXML () where
@@ -213,24 +244,9 @@ instance ToFromXML Bool where
 		selfun True  = 0
 		selfun False = 1
 
-{-|
-We represent special Chars by Haskell's escape sequences.
-A Char is not embraced by single quotes (as it would be using the default instance).
--}
 instance ToFromXML Char where
 	xMLPickler = xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
 
-{-|
-A String is represented a tag's text content, using the common Haskell escape sequences.
-For better readability and prevention of very long lines in the XML file, after each @'\r'@, @'\n'@ and @'\t'@
-the same character is inserted unescaped after the character's escape sequence.
-The unescaped character is removed again when parsing the String.
-For example, @"abc\ndef"@ will be written in the XML file as @"abc\\n\ndef"@,
-with the LF escaped (i.e. @"\\n"@) and followed by a real LF (@'\n'@).
-Injecting line breaks and tabs makes long text much more readable und editable by humans
-(which is one of the original purposes of XML).
-The real LF will be filtered out again while parsing the XML file String.
--}
 instance ToFromXML String where
 	xMLPickler = xpContent pickleContentString
 
@@ -248,7 +264,7 @@ pickleContentString = xpWrap ( readLitString, showLitString ) xpText0 where
 	showLitString (c:ss) | skipPickleString c = showLitChar c $ c : showLitString ss
 	showLitString (c:ss) = showLitChar c $ showLitString ss
 
-{-|
+{-
 Pickler for a Map.
 Didn't use 'xpMap' because @show@ing keys as attributes might be inconvenient/unreadable for more complex key types.
 -}
@@ -258,15 +274,11 @@ instance (Ord k,ToFromXML k,ToFromXML v) => ToFromXML (Map.Map k v) where
 			(xpElemNodes "KEY"  xMLPickler)
 			(xpElemNodes "ELEM" xMLPickler)
 
-{-|
-Pickler for an 'IntMap'.
-Here we use an attribute for the 'Int' key.
--}
 instance (ToFromXML v) => ToFromXML (IntMap.IntMap v) where
 	xMLPickler = xpElemNodes "INTMAP" $ xpWrap (IntMap.fromList,IntMap.toList) $ xpList $ 
 		xpElem "ELEM" (xpAttr "index" xpPrim) xMLPickler
 
--- | Didn't use an attribute for the dimension of the tuple because this is not checkable by a schema.
+-- Didn't use an attribute for the dimension of the tuple because this is not checkable by a schema.
 instance (ToFromXML a,ToFromXML b) => ToFromXML (a,b) where
 	xMLPickler = xpElemNodes "PAIR" $ xpPair (xpComponent 0) (xpComponent 1)
 
@@ -307,7 +319,7 @@ instance (ToFromXML a,Ord a) => ToFromXML (Set.Set a) where
 
 -- TODO: Insert ToFromXML instances for date and time types, maybe in conformance to XSD types?
 
--- | Here we assume that array index types (usually 'Int') are sufficiently simple to be represented as string in an attribute.
+-- Here we assume that array index types (usually 'Int') are sufficiently simple to be represented as string in an attribute.
 instance (Ix i,Show i,Read i,ToFromXML e) => ToFromXML (Array i e) where
 	xMLPickler = xpWrap (list2arr,arr2list) $ xpElem "ARRAY" xpbounds $ xpList $
 		xpElemNodes "ELEM" xMLPickler where
@@ -315,7 +327,7 @@ instance (Ix i,Show i,Read i,ToFromXML e) => ToFromXML (Array i e) where
 			arr2list arr = (bounds arr,elems arr)
 			list2arr (bounds,arrelems) = listArray bounds arrelems
 
--- | This is the catch-all instance, leading to the generic @Rep a@ representation
+-- This is the catch-all instance, leading to the generic @Rep a@ representation
 instance (Generic a,GToFromXML (Rep a)) => ToFromXML a where
 	xMLPickler = xpWrap (to,from) gXMLPickler
 
@@ -346,13 +358,15 @@ fromXML bs = case fromXMLEither bs of
 	Right x      -> to x
 
 {-|
-Convenience action, writing an XML representation of generic Haskell data to a file.
+Action writing an XML representation of generic Haskell data to a file.
+The underlying writeFile operation is strict.
 -}
 writeToXMLFile :: (Generic a,GToFromXML (Rep a)) => FilePath -> a -> IO ()
 writeToXMLFile filepath a = BS.writeFile filepath $ toXML a
 
 {-|
-Convenience action, reading generic Haskell data from an XML file.
+Action reading generic Haskell data from an XML file.
+The underlying readFile operation is strict.
 -}
 readFromXMLFile :: (Generic a,GToFromXML (Rep a)) => FilePath -> IO a
 readFromXMLFile filepath = BS.readFile filepath >>= return . fromXML
