@@ -1,7 +1,7 @@
 name:                tofromxml
 version:             0.1.0.0
 synopsis:            Reading/writing Haskell data from/to XML
-description:         A library for reading/writing Haskell data from/to XML. Only prerequisite is that the data type derives Generic.
+description:         A library for reading\/writing Haskell data from\/to XML. Only prerequisite is that the data type derives Generic.
 license:             BSD3
 license-file:        LICENSE
 author:              Robert Reitmeier
