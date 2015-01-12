@@ -1,5 +1,5 @@
 name:                tofromxml
-version:             0.1.0.2
+version:             0.1.0.3
 synopsis:            Reading and writing Haskell data from and to XML
 description:         A library for reading and writing Haskell data from and to XML. Only prerequisite is that the data type derives Generic.
 license:             BSD3
@@ -11,7 +11,8 @@ copyright:           (c) 2014 Robert Reitmeier
 category:            XML
 build-type:          Simple
 cabal-version:       >=1.10
-extra-source-files:  test/Example.hs test/TestToFromXML.hs test/test.xml
+extra-source-files:  test/Example.hs test/TestToFromXML.hs
+extra-doc-files:     test/Example.hs test/TestToFromXML.hs test/test.xml
 
 library
   exposed-modules:   Text.XML.ToFromXML
