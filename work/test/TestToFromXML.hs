@@ -15,10 +15,11 @@ import Data.Complex
 import Data.Ratio
 import Text.Printf
 import System.FilePath
+import Control.Exception
 
 testTest :: (Eq i,Eq e,Eq a,Ix i,Ord a,Show a,Show i,Read i,Show e,ToFromXML e,ToFromXML a) => (Int,Test a i e) -> IO Bool
 testTest (i,test) = do
-	putStrLn $ "\n-------------------------\nTest " ++ show i
+	putStrLn $ "\n--- Test " ++ show i ++ " ----------------------------"
 
 	let testfilename = "Test" ++ show i ++ ".xml"
 
@@ -26,12 +27,11 @@ testTest (i,test) = do
 
 	test' <- readFromXMLFile testfilename
 
-	rc <- case test==test' of
-		True -> putStrLn "OK." >> return ExitSuccess
-		False -> do
-			putStrLn $ printf "/= ERROR!\nWRITTEN: %s\n/=\nREAD   : %s" (show test) (show test')
-			return $ ExitFailure 1
-	exitWith rc
+	let ok = test==test'
+	case ok of
+		True -> putStrLn "OK."
+		False -> putStrLn $ printf "/= ERROR!\nWRITTEN: %s\n/=\nREAD   : %s" (show test) (show test')
+	return ok
 
 data Test a i e =
 	Test1 Int Char () |

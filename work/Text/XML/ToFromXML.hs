@@ -159,7 +159,7 @@ Strictly speaking it is unnecessary to encode the name as well, but improves rea
 and might add to safety...
 -}
 instance (GToFromXML f,Constructor c) => GToFromXML (M1 C c f) where
-	gXMLPickler = xpWrap (M1,unM1) $ xpElemWithAttr "CONSTRUCTOR" "name" conname gXMLPickler where
+	gXMLPickler = xpWrap (M1,unM1) $ xpElemNodes conname gXMLPickler where
 		conname = conName (undefined :: M1 C c f p)
 
 -- | No tag created for @M1 S NoSelector@, this is handled in 'PickleProdN'.

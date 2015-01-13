@@ -18,7 +18,7 @@ library
   exposed-modules:   Text.XML.ToFromXML
   other-extensions:  DeriveGeneric, DefaultSignatures, UndecidableInstances, ScopedTypeVariables, OverlappingInstances, TypeOperators, FlexibleContexts, FlexibleInstances
   build-depends:     base >=4.7 && <5, bytestring >=0.10, hexpat-pickle >=0.6, hexpat >=0.20, containers >=0.5, array >=0.5
-  hs-source-dirs:    .
+  hs-source-dirs:    .,test
   default-language:  Haskell2010
   ghc-options:       -fcontext-stack=50
 
