@@ -63,29 +63,29 @@ data TestSel = TestSel1 Int | TestSel2 Char | TestSel3 TestSel | TestSel4 (Test 
 main = do
 	longstring <- readFile $ "test" </> "TestToFromXML.hs"
 	oks <- sequence $ map testTest $ zip [1..] ([
-		Test13 (longstring,0),
-		Test3 [(map chr [8..16],99)],
-		Test4 [
-			Test4 $
-				Test2 "  teststr  " (Test1 2 '\'' ()) :
-					map (\ i -> Test1 (0-i) (chr i) ()) [0..255],
-			Test3 [("<DATATYPE name=\"Test\">",100)],
-			Test3 [(map chr [0..255],99)],
-			Test13 ("abc",3),
-			Test14 (3,4),
-			Test5,
-			Test4 [],
-			Test3 [("",0)],
-			Test6 (pi,pi,True),
-			Test6 (1.2345678e+37,1.2345678e-250,False),
-			Test7 [1..10] ],
-		Test8 $ Map.fromList [("abc",Test4 []),("def",Test5),("ghi",Test7 [1,2,3])],
-		Test4 [ Test3 [("first",2)], Test6 (1.23,1.23456,False) ],
-		Test9 (Just $ Test7 [1,2,3]) Nothing (Left $ Test1 7 'v' ()) (Right 8),
-		Test10 (Set.fromList [10,27,-1,1,3,5,7,9]),
-		Test11 (listArray (10,12) [3.3,4.4,5.5]),
+--		Test13 (longstring,0),
+--		Test3 [(map chr [8..16],99)],
+--		Test4 [
+--			Test4 $
+--				Test2 "  teststr  " (Test1 2 '\'' ()) :
+--					map (\ i -> Test1 (0-i) (chr i) ()) [0..255],
+--			Test3 [("<DATATYPE name=\"Test\">",100)],
+--			Test3 [(map chr [0..255],99)],
+--			Test13 ("abc",3),
+--			Test14 (3,4),
+--			Test5,
+--			Test4 [],
+--			Test3 [("",0)],
+--			Test6 (pi,pi,True),
+--			Test6 (1.2345678e+37,1.2345678e-250,False),
+--			Test7 [1..10] ],
+--		Test8 $ Map.fromList [("abc",Test4 []),("def",Test5),("ghi",Test7 [1,2,3])],
+--		Test4 [ Test3 [("first",2)], Test6 (1.23,1.23456,False) ],
+--		Test9 (Just $ Test7 [1,2,3]) Nothing (Left $ Test1 7 'v' ()) (Right 8),
+--		Test10 (Set.fromList [10,27,-1,1,3,5,7,9]),
+--		Test11 (listArray (10,12) [3.3,4.4,5.5]),
 		Test12 (27 % 8) (1.23 :+ (-3.45)),
-		Test15 $ IntMap.fromList $ zip [-2..] [Test5, Test7 [-2,-1,0], Test13 ("test15",666) ],
+--		Test15 $ IntMap.fromList $ zip [-2..] [Test5, Test7 [-2,-1,0], Test13 ("test15",666) ],
 		Test16 [
 			TestSel1 4,
 			TestSel2 'f',

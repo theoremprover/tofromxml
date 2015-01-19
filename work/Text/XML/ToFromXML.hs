@@ -119,10 +119,10 @@ instance (PickleProdN f1,PickleProdN f2) => PickleProdN (f1 :*: f2) where
 		(i1,p1) = pickleProdN i
 		(i2,p2) = pickleProdN i1
 
-argTagNames = [ "ARG-" ++ show i | i <- [1..] ]
+--argTagNames = [ "ARG-" ++ show i | i <- [1..] ]
 
 instance (GToFromXML f) => PickleProdN (M1 S NoSelector f) where
-	pickleProdN i = (i+1,xpElemNodes (argTagNames!!i) gXMLPickler)
+	pickleProdN i = (i+1,gXMLPickler)
 
 {-|
 For constructor arguments, one can also leave out the selector attribute
@@ -133,8 +133,8 @@ instance (GToFromXML f,Selector s) => PickleProdN (M1 S s f) where
 	pickleProdN i = (i+1,picklearg) where
 		selname = selName (undefined :: M1 S s f p)
 		picklearg = xpAlt (\_->0) [
-			xpElemWithAttr (argTagNames!!i) "selector" selname gXMLPickler,
-			xpElemNodes (argTagNames!!i) gXMLPickler ]
+			xpElemWithAttr "SELECTOR" "name" selname gXMLPickler,
+			gXMLPickler ]
 
 instance (PickleProdN (f1 :*: f2)) => GToFromXML (f1 :*: f2) where
 	gXMLPickler = snd (pickleProdN 0)
@@ -170,10 +170,6 @@ instance (GToFromXML f) => GToFromXML (M1 S NoSelector f) where
 instance (GToFromXML f,Selector s) => GToFromXML (M1 S s f) where
 	gXMLPickler = xpWrap (M1,unM1) gXMLPickler
 
--- | A helper function injecting an attribute with a given/fixed value in a tag.
-xpElemWithAttr tag attrname attrval pickler = xpWrap (snd,\b->((),b)) $
-	xpElem tag (xpAttrFixed attrname attrval) pickler
-
 {-
 @V1@ is not an instance of 'GToFromXML', because we can't serialize data of an empty type since there
 are no constructors. It shouldn't be necessary to serialize an empty type, so @V1@ should be rejected by the type checker.
@@ -184,6 +180,14 @@ instance GToFromXML U1 where
 
 instance (ToFromXML a) => GToFromXML (K1 R a) where
 	gXMLPickler = xpWrap (K1,unK1) xMLPickler
+
+-- | A helper function injecting an attribute with a given/fixed value in a tag.
+xpElemWithAttr tag attrname attrval pickler = xpWrap (snd,\b->((),b)) $
+	xpElem tag (xpAttrFixed attrname attrval) pickler
+
+-- | Pickles a sequence of maybe different tags, but result types are the same
+xpSequence :: Pickler a -> Pickler [a]
+xpSequence xpelem = xpList xpelem
 
 {-|
 The class 'ToFromXML' declares that there is a pickler for the instance type.
@@ -217,13 +221,13 @@ class ToFromXML a where
 	-- | The default signature of 'xMLPickler' requires 'Read' and 'Show' instances
 	default xMLPickler :: (Read a,Show a) => Pickler a
 	-- | The default definition via 'xpPrim' uses show and read to convert the value to XML tag text content.
-	xMLPickler = xpContent xpPrim
+	xMLPickler = xpElemNodes "VALUE" $ xpContent xpPrim
 
 instance ToFromXML () where
 	xMLPickler = xpElemNodes "UNIT" xpUnit
 
 instance (ToFromXML a) => ToFromXML [a] where
-	xMLPickler = xpElemNodes "LIST" $ xpList0 $ xpElemNodes "ITEM" xMLPickler
+	xMLPickler = xpElemNodes "LIST" $ xpSequence xMLPickler
 
 instance ToFromXML Int
 instance ToFromXML Int8
@@ -249,10 +253,10 @@ instance ToFromXML Bool where
 		selfun False = 1
 
 instance ToFromXML Char where
-	xMLPickler = xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
+	xMLPickler = xpElemNodes "CHAR" $ xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
 
 instance ToFromXML String where
-	xMLPickler = xpContent pickleContentString
+	xMLPickler = xpElemNodes "STRING" $ xpContent pickleContentString
 
 skipPickleString = (`elem` ['\r','\n','\t'])
 
@@ -274,14 +278,12 @@ Didn't use 'Text.XML.Expat.Pickle.xpMap' because @show@ing keys as attributes mi
 Otherwise, one would probably use an @Int@ as key, so one should use "Data.IntMap" anyway.
 -}
 instance (Ord k,ToFromXML k,ToFromXML v) => ToFromXML (Map.Map k v) where
-	xMLPickler = xpElemNodes "MAP" $ xpWrap (Map.fromList,Map.toList) $ xpList $ 
-		xpElemNodes "ASSOC" $ xpPair
-			(xpElemNodes "KEY"  xMLPickler)
-			(xpElemNodes "ELEM" xMLPickler)
+	xMLPickler = xpElemNodes "MAP" $ xpWrap (Map.fromList,Map.toList) $ xpSequence $ 
+		xpElemNodes "ASSOC" $ xpPair xMLPickler xMLPickler
 
 instance (ToFromXML v) => ToFromXML (IntMap.IntMap v) where
-	xMLPickler = xpElemNodes "INTMAP" $ xpWrap (IntMap.fromList,IntMap.toList) $ xpList $ 
-		xpElem "ELEM" (xpAttr "index" xpPrim) xMLPickler
+	xMLPickler = xpElemNodes "INTMAP" $ xpWrap (IntMap.fromList,IntMap.toList) $ xpSequence $ 
+		xpElem "ELEM" (xpAttr "key" xpPrim) xMLPickler
 
 -- Didn't use an attribute for the dimension of the tuple because this is not checkable by a schema.
 instance (ToFromXML a,ToFromXML b) => ToFromXML (a,b) where
@@ -301,8 +303,8 @@ instance (ToFromXML a,ToFromXML b,ToFromXML c,ToFromXML d,ToFromXML e,ToFromXML 
 
 -- | Pickle a tuple's @i@\'th component. The component tag names are distinct, otherwise hexpat-pickle confuses this with a list and gives a parse error.
 xpComponent :: (ToFromXML a) => Int -> Pickler a
-xpComponent i = xpElemNodes (componentnames!!i) xMLPickler where
-	componentnames = [ "FIRST","SECOND","THIRD","FOURTH","FIFTH","SIXTH" ]
+xpComponent i = xMLPickler --xpElemNodes (componentnames!!i) xMLPickler where
+	--componentnames = [ "FIRST","SECOND","THIRD","FOURTH","FIFTH","SIXTH" ]
 
 instance (ToFromXML a) => ToFromXML (Maybe a) where
 	xMLPickler = xpAlt selfun [
@@ -319,18 +321,17 @@ instance (ToFromXML a,ToFromXML b) => ToFromXML (Either a b) where
 		selfun (Right _) = 1
 
 instance (ToFromXML a,Ord a) => ToFromXML (Set.Set a) where
-	xMLPickler = xpElemNodes "SET" $ xpWrap (Set.fromList,Set.toList) $ xpList $
-		xpElemNodes "ELEM" xMLPickler
+	xMLPickler = xpElemNodes "SET" $ xpWrap (Set.fromList,Set.toList) $ xpSequence xMLPickler
+--		xpElemNodes "ELEM" xMLPickler
 
 -- TODO: Insert ToFromXML instances for date and time types, maybe in conformance to XSD types?
 
 -- Here we assume that array index types (usually 'Int') are sufficiently simple to be represented as string in an attribute.
 instance (Ix i,Show i,Read i,ToFromXML e) => ToFromXML (Array i e) where
-	xMLPickler = xpWrap (list2arr,arr2list) $ xpElem "ARRAY" xpbounds $ xpList $
-		xpElemNodes "ELEM" xMLPickler where
-			xpbounds = xpPair (xpAttr "lowerBound" xpPrim) (xpAttr "upperBound" xpPrim)
-			arr2list arr = (bounds arr,elems arr)
-			list2arr (bounds,arrelems) = listArray bounds arrelems
+	xMLPickler = xpWrap (list2arr,arr2list) $ xpElem "ARRAY" xpbounds $ xpSequence $ xMLPickler where
+		xpbounds = xpPair (xpAttr "lowerBound" xpPrim) (xpAttr "upperBound" xpPrim)
+		arr2list arr = (bounds arr,elems arr)
+		list2arr (bounds,arrelems) = listArray bounds arrelems
 
 -- This is the catch-all instance, leading to the generic @Rep a@ representation
 instance (Generic a,GToFromXML (Rep a)) => ToFromXML a where
