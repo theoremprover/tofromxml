@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric,DefaultSignatures,UndecidableInstances,ScopedTypeVariables,
-	OverlappingInstances,TypeOperators,FlexibleContexts,FlexibleInstances #-}
+	OverlappingInstances,TypeOperators,FlexibleContexts,FlexibleInstances,MultiParamTypeClasses,TypeFamilies,AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -fcontext-stack=50 #-}
 
 {-|
@@ -116,46 +116,44 @@ Pickling a product is done by first pickling the first component, and then pickl
 component with the current index @i1@ returned by the first @pickleProdN i@.
 The current index @i2@ after @pickleProdN i1@ is returned.
 -}
-instance (PickleProdN f1,PickleProdN f2,TracePickle f1,TracePickle f2) => PickleProdN (f1 :*: f2) where
+instance (PickleProdN f1,PickleProdN f2) => PickleProdN (f1 :*: f2) where
 	pickleProdN i = (i2,xpWrap (uncurry (:*:),\ (a :*: b) -> (a,b)) $ xpPair p1 p2) where
 		(i1,p1) = pickleProdN i
 		(i2,p2) = pickleProdN i1
 
---argTagNames = repeat "ARG" --[ "ARG-" ++ show i | i <- [1..] ]
+--argTagNames = {-repeat "ARG" -}[ "ARG-" ++ show i | i <- [1..] ]
 
-instance (GToFromXML f,TracePickle f) => PickleProdN (M1 S NoSelector f) where
-	pickleProdN i = (i+1,{-xpElemNodes (argTagNames!!i)-} xpTrace gXMLPickler)
+instance (GToFromXML f) => PickleProdN (M1 S NoSelector f) where
+	pickleProdN i = (i+1,{-xpElemNodes (argTagNames!!i) $-} xpTrace "(M1 S NoSelector f)" gXMLPickler)
 
 {-|
 For constructor arguments, one can also leave out the selector attribute
 (like Haskell syntax allows leaving out record syntax).
 This makes it easier to manually write data XML.
 -}
-instance (GToFromXML f,Selector s,TracePickle f) => PickleProdN (M1 S s f) where
+instance (GToFromXML f,Selector s) => PickleProdN (M1 S s f) where
 	pickleProdN i = (i+1,picklearg) where
 		selname = selName (undefined :: M1 S s f p)
-		picklearg = xpTrace gXMLPickler {-xpAlt (\_->0) [
+		picklearg = xpTrace "PickleProdN (M1 S s f)" $ xpAlt (\_->0) [
 --			xpElemWithAttr "SELECTOR" "name" selname gXMLPickler,
 --			gXMLPickler ]
 --			xpElemWithAttr (argTagNames!!i) "selector" selname gXMLPickler,
 --			xpElemNodes (argTagNames!!i) gXMLPickler ]
 			xpElemWithAttr "SELECTOR" "name" selname gXMLPickler,
 			gXMLPickler ]
--}
 
-class (Show (f p)) => TracePickle f p where
-	xpTrace :: Pickler (f p) -> Pickler (f p)
-	xpTrace xp = PU {
-		unpickleTree  = \ tree -> trace (printf "unpickle %s" (show tree))  $ unpickleTree xp tree,
-		unpickleTree' = \ tree -> trace (printf "unpickle' %s" (show tree)) $ unpickleTree' xp tree,
-		pickleTree    = \ val  -> trace (printf "pickle %s" (show val))     $ pickleTree xp val
-		}
+xpTrace :: (Show t) => String -> PU t a -> PU t a
+xpTrace s xp = xp {-PU {
+	unpickleTree  = \ tree -> trace (printf "unpickle  %s : %s" s (show tree)) $ unpickleTree xp tree,
+	unpickleTree' = \ tree -> trace (printf "unpickle' %s : %s" s (show tree)) $ unpickleTree' xp tree,
+	pickleTree    = pickleTree xp
+	} -}
 
 instance (PickleProdN (f1 :*: f2)) => GToFromXML (f1 :*: f2) where
-	gXMLPickler = snd (pickleProdN 0)
+	gXMLPickler = xpTrace "(f1 :*: f2)" $ snd (pickleProdN 0)
 
 instance (GToFromXML f1,GToFromXML f2) => GToFromXML (f1 :+: f2) where
-	gXMLPickler = xpAlt selfun [
+	gXMLPickler = xpTrace "GToFromXML (f1 :+: f2)" $ xpAlt selfun [
 		xpWrap (L1,\ (L1 x) -> x) gXMLPickler,
 		xpWrap (R1,\ (R1 x) -> x) gXMLPickler ] where
 		selfun (L1 _) = 0
@@ -174,16 +172,16 @@ Strictly speaking it is unnecessary to encode the name as well, but improves rea
 and might add to safety...
 -}
 instance (GToFromXML f,Constructor c) => GToFromXML (M1 C c f) where
-	gXMLPickler = xpWrap (M1,unM1) $ xpElemNodes conname gXMLPickler where
+	gXMLPickler = xpTrace "GToFromXML (M1 C c f)" $ xpWrap (M1,unM1) $ xpElemNodes conname gXMLPickler where
 		conname = conName (undefined :: M1 C c f p)
 
 -- | No tag created for @M1 S NoSelector@, this is handled in 'PickleProdN'.
 instance (GToFromXML f) => GToFromXML (M1 S NoSelector f) where
-	gXMLPickler = xpWrap (M1,unM1) gXMLPickler
+	gXMLPickler = xpTrace "GToFromXML (M1 S NoSelector f)" $ xpWrap (M1,unM1) gXMLPickler
 
 -- | No tag created for @M1 S s@, this is handled in 'PickleProdN'.
 instance (GToFromXML f,Selector s) => GToFromXML (M1 S s f) where
-	gXMLPickler = xpWrap (M1,unM1) gXMLPickler
+	gXMLPickler = xpTrace "GToFromXML (M1 S s f)" $ xpWrap (M1,unM1) gXMLPickler
 
 {-
 @V1@ is not an instance of 'GToFromXML', because we can't serialize data of an empty type since there
@@ -191,10 +189,10 @@ are no constructors. It shouldn't be necessary to serialize an empty type, so @V
 -}
 
 instance GToFromXML U1 where
-	gXMLPickler = xpLift U1
+	gXMLPickler = xpTrace "GToFromXML U1" $ xpLift U1
 
 instance (ToFromXML a) => GToFromXML (K1 R a) where
-	gXMLPickler = xpWrap (K1,unK1) xMLPickler
+	gXMLPickler = xpTrace "GToFromXML (K1 R a)" $ xpWrap (K1,unK1) xMLPickler
 
 -- | A helper function injecting an attribute with a given/fixed value.
 xpElemWithAttr tag attrname attrval pickler = xpWrap (snd,\b->((),b)) $
@@ -229,50 +227,50 @@ The inserted newlines and TABs will be filtered out again while parsing the Stri
 class ToFromXML a where
 	-- | An instance of 'ToFromXML' provides a pickler for type @a@.
 	xMLPickler :: Pickler a
-	-- | The default signature of 'xMLPickler' requires 'Read' and 'Show' instances
-	default xMLPickler :: (Read a,Show a) => Pickler a
-	-- | The default definition via 'xpPrim' uses show and read to convert the value to XML tag text content.
-	xMLPickler = xpElemNodes "VALUE" $ xpContent xpPrim
+
+-- | A pickler using show and read to convert a value to XML tag text content.
+readShowPickler :: (Read a,Show a) => String -> Pickler a
+readShowPickler tagname = xpTrace tagname $ xpElemNodes tagname $ xpContent $ xpTrace "PRIM" $ xpPrim
 
 instance ToFromXML () where
-	xMLPickler = xpElemNodes "UNIT" xpUnit
+	xMLPickler = xpTrace "ToFromXML ()" $ xpElemNodes "Unit" xpUnit
 
 instance (ToFromXML a) => ToFromXML [a] where
-	xMLPickler = xpElemNodes "LIST" $ xpList0 xMLPickler
+	xMLPickler = xpTrace "ToFromXML [a]" $ xpElemNodes "LIST" $ xpList0 xMLPickler
 
-instance ToFromXML Int
-instance ToFromXML Int8
-instance ToFromXML Int16
-instance ToFromXML Int32
-instance ToFromXML Int64
-instance ToFromXML Integer
-instance ToFromXML Word
-instance ToFromXML Word8
-instance ToFromXML Word16
-instance ToFromXML Word32
-instance ToFromXML Word64
-instance ToFromXML Float
-instance ToFromXML Double
-instance (Show a,Read a,Integral a) => ToFromXML (Ratio a)
-instance (Show a,Read a) => ToFromXML (Complex a)
+instance ToFromXML Int where xMLPickler = readShowPickler "Int"
+instance ToFromXML Int8 where xMLPickler = readShowPickler "Int8"
+instance ToFromXML Int16 where xMLPickler = readShowPickler "Int16"
+instance ToFromXML Int32 where xMLPickler = readShowPickler "Int32"
+instance ToFromXML Int64 where xMLPickler = readShowPickler "Int64"
+instance ToFromXML Integer where xMLPickler = readShowPickler "Integer"
+instance ToFromXML Word where xMLPickler = readShowPickler "Word"
+instance ToFromXML Word8 where xMLPickler = readShowPickler "Word8"
+instance ToFromXML Word16 where xMLPickler = readShowPickler "Word16"
+instance ToFromXML Word32 where xMLPickler = readShowPickler "Word32"
+instance ToFromXML Word64 where xMLPickler = readShowPickler "Word64"
+instance ToFromXML Float where xMLPickler = readShowPickler "Float"
+instance ToFromXML Double where xMLPickler = readShowPickler "Double"
+instance (Show a,Read a,Integral a) => ToFromXML (Ratio a) where xMLPickler = readShowPickler "Ratio"
+instance (Show a,Read a) => ToFromXML (Complex a) where xMLPickler = readShowPickler "Complex"
 
 instance ToFromXML Bool where
 	xMLPickler = xpAlt selfun [
-		xpElemNodes "TRUE"  $ xpLift True,
-		xpElemNodes "FALSE" $ xpLift False ] where
+		xpElemNodes "True"  $ xpLift True,
+		xpElemNodes "False" $ xpLift False ] where
 		selfun True  = 0
 		selfun False = 1
 
 instance ToFromXML Char where
-	xMLPickler = xpElemNodes "CHAR" $ xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
+	xMLPickler = xpElemNodes "Char" $ xpContent $ xpWrap ( fst.head.readLitChar, (`showLitChar` "") ) xpText
 
 instance ToFromXML String where
-	xMLPickler = xpElemNodes "STRING" $ xpContent pickleContentString
+	xMLPickler = xpElemNodes "String" $ xpContent pickleContentString
 
 skipPickleString = (`elem` ['\r','\n','\t'])
 
 {-|
-Pickles a string to/from text content with escaping 
+Pickles a string to\/from text content with escaping 
 -}
 pickleContentString :: PU String String
 pickleContentString = xpWrap ( readLitString, showLitString ) xpText0 where

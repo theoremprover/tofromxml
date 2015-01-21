@@ -54,14 +54,19 @@ data Test a i e =
 	Test18 Int Char Bool String |
 	Test19 Int Char Bool String Int |
 	Test20 Int Char Bool (String,Char) Int Float |
-	Test21 Int Char Bool (String,Char,Int) Int Float Int Double Bool Char
+	Test21 Int Char Bool (String,Char,Int) Int Float Int Double Bool Char |
+	Test22 (Ratio Int) |
+	Test23 (Ratio Int,Complex Double) |
+	Test24 Int Double |
+	Test25 () Double
 	deriving (Show,Eq,Generic)
+
+--testfilter ts = [ts!!11]  -- Just execute single test
+testfilter = id  -- Execute all tests
+
 
 data TestSel = TestSel1 Int | TestSel2 Char | TestSel3 TestSel | TestSel4 (Test () Int ()) | TestSel5
 	deriving (Show,Eq,Generic)
-
-testfilter ts = [ts!!8]  -- Just execute single test
---testfilter = id  -- Execute all tests
 
 main = do
 	longstring <- readFile $ "test" </> "TestToFromXML.hs"
@@ -88,6 +93,10 @@ main = do
 		Test10 (Set.fromList [10,27,-1,1,3,5,7,9]),
 		Test11 (listArray (10,12) [3.3,4.4,5.5]),
 		Test12 (27 % 8) (1.23 :+ (-3.45)),
+		Test23 (27 % 8, 1.23 :+ (-3.45)),
+		Test24 123 123.456,
+		Test25 () 123.456,
+		Test22 (27 % 8),
 		Test15 $ IntMap.fromList $ zip [-2..] [Test5, Test7 [-2,-1,0], Test13 ("test15",666) ],
 		Test16 [
 			TestSel1 4,
