@@ -61,8 +61,8 @@ data Test a i e =
 	Test25 () Double
 	deriving (Show,Eq,Generic)
 
---testfilter ts = [ts!!11]  -- Just execute single test
-testfilter = id  -- Execute all tests
+testfilter ts = [ts!!4]  -- Just execute single test
+--testfilter = id  -- Execute all tests
 
 
 data TestSel = TestSel1 Int | TestSel2 Char | TestSel3 TestSel | TestSel4 (Test () Int ()) | TestSel5
@@ -73,7 +73,7 @@ main = do
 	oks <- sequence $ map testTest $ zip [1..] (testfilter [
 		Test13 (longstring,0),
 		Test3 [(map chr [8..16],99)],
-		Test4 [
+{-		Test4 [
 			Test4 $
 				Test2 "  teststr  " (Test1 2 '\'' ()) :
 					map (\ i -> Test1 (0-i) (chr i) ()) [0..255],
@@ -86,7 +86,7 @@ main = do
 			Test3 [("",0)],
 			Test6 (pi,pi,True),
 			Test6 (1.2345678e+37,1.2345678e-250,False),
-			Test7 [1..10] ],
+			Test7 [1..10] ], -}
 		Test8 $ Map.fromList [("abc",Test4 []),("def",Test5),("ghi",Test7 [1,2,3])],
 		Test4 [ Test3 [("first",2)], Test6 (1.23,1.23456,False) ],
 		Test9 (Just $ Test7 [1,2,3]) Nothing (Left $ Test1 7 'v' ()) (Right 8),
